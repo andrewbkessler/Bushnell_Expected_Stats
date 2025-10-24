@@ -76,24 +76,25 @@ model_data <- join_model_data |>
 ################### KNN - Carot Method ##################
 ### Split into train and test
 set.seed(2018)
-model_data$total_bases <- factor(model_data$total_bases, levels = c(0, 1, 2, 3, 4))
-trainIndex <- createDataPartition(model_data$total_bases, 
+knn_model_data <- model_data
+knn_model_data$total_bases <- factor(knn_model_data$total_bases, levels = c(0, 1, 2, 3, 4))
+knn_trainIndex <- createDataPartition(knn_model_data$total_bases, 
                                   times=1, 
                                   p = .8, 
                                   list = FALSE)
-train <- model_data[trainIndex, ]
-test_merged <- join_model_data[-trainIndex, ]
-test <- model_data[-trainIndex, ]
+knn_train <- knn_model_data[knn_trainIndex, ]
+knn_test_merged <- join_model_data[-knn_trainIndex, ]
+knn_test <- knn_model_data[-knn_trainIndex, ]
 
 ### Data Preprocessing (scaling)
-preProcValues <- preProcess(train, method = c("center", "scale"))
-trainTransformed <- predict(preProcValues, train)
-testTransformed <- predict(preProcValues, test)
+knn_preProcValues <- preProcess(knn_train, method = c("center", "scale"))
+knn_trainTransformed <- predict(knn_preProcValues, knn_train)
+knn_testTransformed <- predict(knn_preProcValues, knn_test)
 
 ### Model Tuning (finding optimal K value)
 knnModel <- train(
   total_bases ~ ., 
-  data = trainTransformed, 
+  data = knn_trainTransformed, 
   method = "knn", 
   trControl = trainControl(method = "cv"), 
   tuneGrid = data.frame(k = c(3,5,7,9,11,13,15,17,19,21,23,25,27,29,31))
@@ -101,33 +102,33 @@ knnModel <- train(
 knnModel$bestTune$k
 
 ### Training best model
-best_model<- knn3(
+knn_best_model<- knn3(
   total_bases ~ .,
-  data = trainTransformed,
+  data = knn_trainTransformed,
   k = knnModel$bestTune$k
 )
 
 ### Model Evaluation (class version)
-predictions <- predict(best_model, testTransformed,type = "class")
+knn_predictions <- predict(knn_best_model, knn_testTransformed,type = "class")
 ### Calculate confusion matrix
-cm <- confusionMatrix(predictions, testTransformed$total_bases)
-cm
-actual <- test$total_bases
-cm_accuracy <- table(actual,predictions)
-accuracy <- sum(diag(cm_accuracy))/length(actual)
-sprintf("Accuracy: %.2f%%", accuracy*100)
+knn_cm <- confusionMatrix(knn_predictions, knn_testTransformed$total_bases)
+knn_cm
+knn_actual <- knn_test$total_bases
+knn_cm_accuracy <- table(knn_actual,knn_predictions)
+knn_accuracy <- sum(diag(knn_cm_accuracy))/length(knn_actual)
+sprintf("Accuracy: %.2f%%", knn_accuracy*100)
 
 ### Model Evaluation (probability version)
-probs <- predict(best_model, testTransformed,type = "prob")
-head(probs, 20)
-merged_probabilities <- cbind(test_merged, probs) |> 
+knn_probs <- predict(knn_best_model, knn_testTransformed,type = "prob")
+head(knn_probs, 20)
+knn_merged_probabilities <- cbind(knn_test_merged, knn_probs) |> 
   rename('prob_0'='0', 'prob_1'='1', 'prob_2'='2', 'prob_3'='3', 'prob_4'='4') |> 
   mutate(exp_bases = prob_1*1 + prob_2*2 + prob_3*3 + prob_4*4)
 
 ### Saving Model Components
 save_train_merged <- join_model_data
-save_train_data <- model_data
-save_train_labels <- model_data[, 3]
+save_train_data <- knn_model_data
+save_train_labels <- knn_model_data[, 3]
 k_value <- knnModel$bestTune$k
 
 knn_components <- list(
@@ -137,7 +138,6 @@ knn_components <- list(
   k = k_value
 )
 saveRDS(knn_components, file = "model_data/knn_setup.Rds")
-
 
 
 
